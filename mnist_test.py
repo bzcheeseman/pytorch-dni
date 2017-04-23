@@ -18,7 +18,7 @@ import numpy as np
 
 from tensorboard_logger import configure, log_value
 
-configure("training/cnndni_5")
+configure("training/cnndni_7")
 
 
 class MNISTExtractor(nn.Module):
@@ -28,12 +28,12 @@ class MNISTExtractor(nn.Module):
         self.update = True
 
         self.FE1 = CNNDNI(nn.Sequential(
-            nn.Conv2d(1, 32, 5),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(1, 16, 5),
+            nn.BatchNorm2d(16),
             nn.ReLU()
-        ), update_out_filters=32, labels=True, update=self.update)
+        ), update_out_filters=16, labels=True, update=self.update)
         self.FE2 = CNNDNI(nn.Sequential(
-            nn.Conv2d(32, 32, 3, stride=(2, 2)),
+            nn.Conv2d(16, 32, 3, stride=2),
             nn.BatchNorm2d(32),
             nn.Tanh()
         ), update_out_filters=32, labels=True, update=self.update)
@@ -50,7 +50,7 @@ class MNISTExtractor(nn.Module):
             except AttributeError:
                 pass
 
-    def forward(self, x, labels):
+    def forward(self, x, labels=None):
         x = self.FE1(x, labels)  # update 1
         x = self.FE2(x, labels)  # update 2
 
@@ -73,7 +73,7 @@ class MNISTExtractor(nn.Module):
 if __name__ == "__main__":
     transform = tv.transforms.ToTensor()
 
-    batch = 25
+    batch = 50
     synth_grad_update = 1
 
     train = tv.datasets.MNIST("data", train=True, transform=transform, download=False)
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     dni_mne = MNISTExtractor()
     criterion = nn.CrossEntropyLoss()
 
-    print_steps = 5
+    print_steps = 10
 
     for epoch in range(5):
         running_loss = 0.0
@@ -129,6 +129,7 @@ if __name__ == "__main__":
 
     print("Test avg loss: ", total_loss / len(test_loader))
     print("Percent correct: ", (correct / len(test_loader)) * 100)
+    # no higher than 13%-15% max previously (DNI better than baseline)
 
 
 
