@@ -6,4 +6,4 @@
 # Full license at pytorch-dni/LICENSE.txt
 #
 
-from .dni import DNI
+from .dni import DNI, CNNDNI
