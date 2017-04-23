@@ -18,51 +18,71 @@ import numpy as np
 
 from tensorboard_logger import configure, log_value
 
-configure("training/cnndni_double_update_2")
+configure("training/cnndni_5")
 
 
 class MNISTExtractor(nn.Module):
     def __init__(self):
         super(MNISTExtractor, self).__init__()
 
-        self.FE = nn.Sequential(
-            nn.Conv2d(1, 8, 3),
-            nn.BatchNorm2d(8),
-            nn.ReLU(),
-            nn.Conv2d(8, 16, 3),
-            nn.BatchNorm2d(16),
+        self.update = True
+
+        self.FE1 = CNNDNI(nn.Sequential(
+            nn.Conv2d(1, 32, 5),
+            nn.BatchNorm2d(32),
             nn.ReLU()
-        )
+        ), update_out_filters=32, labels=True, update=self.update)
+        self.FE2 = CNNDNI(nn.Sequential(
+            nn.Conv2d(32, 32, 3, stride=(2, 2)),
+            nn.BatchNorm2d(32),
+            nn.Tanh()
+        ), update_out_filters=32, labels=True, update=self.update)
 
-        self.num_outs = 16 * ((((28 - 3) + 1) - 3) + 1)**2
+        self.num_outs = int(32 * (np.floor((((28 - 5) + 1) - 3)/2) + 1)**2)
+        self.classifier = DNI(nn.Linear(self.num_outs, 10), update_num_out=10, update=False)
+        self.class_opt = self.classifier.init_optimizer(optim.Adam, {'lr': 0.001, 'weight_decay': 1e-7})
 
-    def forward(self, x):
-        x = self.FE(x)
+    def set_update_false(self):
+        self.update = False
+        for mod in self.modules():
+            try:
+                mod.update = False
+            except AttributeError:
+                pass
+
+    def forward(self, x, labels):
+        x = self.FE1(x, labels)  # update 1
+        x = self.FE2(x, labels)  # update 2
+
+        if self.update:
+            self.FE1.synthetic_update(self.FE2.update_grad)  # update 3
+
+        x = x.view(x.size(0), -1)
+        x = self.classifier(x)  # return the output
         return x
 
+    def optimizer_step(self, outputs, labels, criterion):
+        l = criterion(outputs, labels)
+        l.backward()
+        self.class_opt.step()  # update 4
+
+        self.FE2.synthetic_update(dni_mne.classifier.update_grad)  # update 5
+
+        return l
 
 if __name__ == "__main__":
     transform = tv.transforms.ToTensor()
 
     batch = 25
-    synth_grad_update = 2
+    synth_grad_update = 1
 
     train = tv.datasets.MNIST("data", train=True, transform=transform, download=False)
     train_loader = DataLoader(train, batch_size=batch, shuffle=True, num_workers=4)
 
     test = tv.datasets.MNIST("data", train=False, transform=transform, download=False)
-    test_loader = DataLoader(test, batch_size=batch, shuffle=True, num_workers=4)
+    test_loader = DataLoader(test, batch_size=batch, num_workers=4)
 
-    mne = MNISTExtractor()
-    classifier = nn.Linear(mne.num_outs, 10)
-
-    dni_mne = CNNDNI(mne, update_out_filters=16, labels=True, update=True)
-    # need last layer to be dni also, just set update=False
-    dni_classifier = DNI(classifier, update_num_out=10, update=False)
-
-    classifier_optimizer = dni_classifier.init_optimizer(optim.Adam, {'lr': 0.001})  # others are dealt with
-    # optimizer = optim.Adam(mne.parameters(), lr=0.001)
-    # optimizer_c = optim.Adam(classifier.parameters(), lr=0.001)
+    dni_mne = MNISTExtractor()
     criterion = nn.CrossEntropyLoss()
 
     print_steps = 5
@@ -75,22 +95,10 @@ if __name__ == "__main__":
             inputs = Variable(inputs)
             labels = Variable(labels)
 
-            # optimizer.zero_grad()
-            # optimizer_c.zero_grad()
-
             for j in range(synth_grad_update):
-                features = dni_mne(inputs, labels)
+                outputs = dni_mne(inputs, labels)
 
-            features = features.view(features.size(0), -1)
-            outputs = dni_classifier(features)
-            # outputs = classifier(features)
-            l = criterion(outputs, labels)
-            l.backward()
-            # optimizer.step()
-            # optimizer_c.step()
-            classifier_optimizer.step()
-
-            dni_mne.synthetic_update(dni_classifier.update_grad)
+            l = dni_mne.optimizer_step(outputs, labels, criterion)
 
             running_loss += l.data[0]
 
@@ -102,7 +110,7 @@ if __name__ == "__main__":
                 running_loss = 0.0
 
     print("Training Finished")
-    dni_mne.update = False
+    dni_mne.set_update_false()
     total_loss = 0.0
     correct = 0
     for i, data in enumerate(test_loader, 0):
@@ -110,10 +118,7 @@ if __name__ == "__main__":
         inputs = Variable(inputs)
         labels = Variable(labels)
 
-        features = dni_mne(inputs)
-        # features = mne(inputs)
-        features = features.view(features.size(0), -1)
-        outputs = dni_classifier(features)
+        outputs = dni_mne(inputs)
         # outputs = classifier(features)
         l = criterion(outputs, labels)
         total_loss += l.data[0]

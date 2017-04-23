@@ -103,9 +103,9 @@ class CNNDNI(nn.Module):
                  labels=False,
                  update=True,
                  optimizer=optim.Adam,
-                 optimizer_kwargs={'lr': 0.001, 'weight_decay': 1e-5},
+                 optimizer_kwargs={'lr': 0.001, 'weight_decay': 1e-9},
                  delta_optimizer=optim.Adam,
-                 delta_optimizer_kwargs={'lr': 0.01, 'weight_decay': 1e-2}
+                 delta_optimizer_kwargs={'lr': 0.001, 'weight_decay': 1e-4}
                  ):
         super(CNNDNI, self).__init__()
 
