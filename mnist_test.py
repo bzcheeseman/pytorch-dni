@@ -28,19 +28,26 @@ class MNISTExtractor(nn.Module):
         self.update = True
 
         self.FE1 = CNNDNI(nn.Sequential(
-            nn.Conv2d(1, 16, 5),
+            nn.Conv2d(1, 6, 5),
+            nn.BatchNorm2d(6),
+            nn.ReLU(),
+            nn.MaxPool2d(2, stride=2)
+        ), update_out_filters=6, labels=True, update=self.update)
+        self.FE2 = CNNDNI(nn.Sequential(
+            nn.Conv2d(6, 16, 3),
             nn.BatchNorm2d(16),
             nn.ReLU(),
             nn.MaxPool2d(2, stride=2)
         ), update_out_filters=16, labels=True, update=self.update)
-        self.FE2 = CNNDNI(nn.Sequential(
-            nn.Conv2d(16, 32, 3),
-            nn.BatchNorm2d(32),
-            nn.Tanh()
-        ), update_out_filters=32, labels=True, update=self.update)
 
-        self.num_outs = int(32 * ((np.floor(((28 - 5) + 1)/2) - 3) + 1)**2)
-        self.classifier = DNI(nn.Linear(self.num_outs, 10), update_num_out=10, update=False)
+        self.num_outs = int(16 * np.floor(((((28 - 5) + 1)/2) - 3 + 1)/2)**2)
+
+        self.classifier = DNI(nn.Sequential(
+            nn.Linear(self.num_outs, 256),
+            nn.ReLU(),
+            nn.Linear(256, 10)
+        ), update_num_out=10, update=False)
+
         self.class_opt = self.classifier.init_optimizer(optim.Adam, {'lr': 0.001})
 
     def set_update_false(self):
@@ -108,7 +115,7 @@ if __name__ == "__main__":
 
             if i % print_steps == print_steps-1:
                 current_step = i + 1 + len(train_loader) * epoch
-                log_file.write("Current step: {} Loss: {}\n".format(current_step, running_loss / print_steps))
+                print("Current step: {} Loss: {}".format(current_step, running_loss / print_steps))
                 # log_value("Loss", running_loss / print_steps, step=current_step)
                 running_loss = 0.0
 

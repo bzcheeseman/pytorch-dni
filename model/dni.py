@@ -103,9 +103,9 @@ class CNNDNI(nn.Module):
                  labels=False,
                  update=True,
                  optimizer=optim.Adam,
-                 optimizer_kwargs={'lr': 0.001, 'weight_decay': 1e-9},
+                 optimizer_kwargs={'lr': 0.001, 'weight_decay': 0},
                  delta_optimizer=optim.Adam,
-                 delta_optimizer_kwargs={'lr': 0.001, 'weight_decay': 1e-4}
+                 delta_optimizer_kwargs={'lr': 0.001, 'weight_decay': 1e-5}
                  ):
         super(CNNDNI, self).__init__()
 
@@ -142,7 +142,6 @@ class CNNDNI(nn.Module):
     def forward(self, x, label=None):
 
         self.optimizer.zero_grad()
-        self.delta_optimizer.zero_grad()
 
         def save_grad(grad):
             self.update_grad = grad
@@ -169,6 +168,7 @@ class CNNDNI(nn.Module):
         return x
 
     def synthetic_update(self, next_layer_grad):
+        self.delta_optimizer.zero_grad()
         loss = self.delta_criterion(self.delta, next_layer_grad)
         loss.backward()
         self.delta_optimizer.step()
