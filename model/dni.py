@@ -32,18 +32,23 @@ class DNI(nn.Module):
         self.update = update
 
         if labels:  # can use single layer network <- change this so we can initialize it outside the network...
-            self.synth_grad = nn.Linear(update_num_out + 1, update_num_out)
+            self.synth_grad = nn.Sequential(
+                nn.Linear(update_num_out + 1, update_num_out),
+                nn.PReLU(update_num_out)
+            )
             self.synth_grad.weight.data.uniform_(-1e-6, 1e-6)
             self.synth_grad.bias.data.zero_()
         else:  # use 2-layer network in the case of no labels
-            self.synth_grad = nn.Sequential(OrderedDict([
-                ("lin1", nn.Linear(update_num_out, update_num_out)),
-                ("lin2", nn.Linear(update_num_out, update_num_out))
-            ]))
-            self.synth_grad[0].weight.data.uniform_(-1e6, 1e6)
+            self.synth_grad = nn.Sequential(
+                nn.Linear(update_num_out, update_num_out),
+                nn.PReLU(update_num_out),
+                nn.Linear(update_num_out, update_num_out),
+                nn.PReLU(update_num_out)
+            )
+            self.synth_grad[0].weight.data.uniform_(-1e-6, 1e-6)
             self.synth_grad[0].bias.data.zero_()
-            self.synth_grad[1].weight.data.uniform_(-1e6, 1e6)
-            self.synth_grad[1].bias.data.zero_()
+            self.synth_grad[2].weight.data.uniform_(-1e-6, 1e-6)
+            self.synth_grad[2].bias.data.zero_()
 
         self.optimizer = optimizer(self.update_module.parameters(), **optimizer_kwargs)
 
@@ -105,7 +110,7 @@ class CNNDNI(nn.Module):
                  optimizer=optim.Adam,
                  optimizer_kwargs={'lr': 0.001, 'weight_decay': 0},
                  delta_optimizer=optim.Adam,
-                 delta_optimizer_kwargs={'lr': 0.001, 'weight_decay': 1e-5}
+                 delta_optimizer_kwargs={'lr': 0.001, 'weight_decay': 0}
                  ):
         super(CNNDNI, self).__init__()
 
@@ -116,12 +121,14 @@ class CNNDNI(nn.Module):
         if labels:
             self.synth_grad = nn.Sequential(
                 nn.Conv2d(update_out_filters + 1, update_out_filters, 3, padding=1),
-                nn.BatchNorm2d(update_out_filters)
+                nn.BatchNorm2d(update_out_filters),
+                nn.PReLU(update_out_filters)
             )
         else:
             self.synth_grad = nn.Sequential(
                 nn.Conv2d(update_out_filters, update_out_filters, 3, padding=1),
-                nn.BatchNorm2d(update_out_filters)
+                nn.BatchNorm2d(update_out_filters),
+                nn.PReLU(update_out_filters)
             )
 
         self.optimizer = optimizer(self.update_module.parameters(), **optimizer_kwargs)
